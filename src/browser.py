@@ -32,9 +32,12 @@ def request(url):
         s = ctx.wrap_socket(s, server_hostname=host)
 
     s.send(
-        ("GET {} HTTP/1.0\r\n".format(path) + "Host: {}\r\n\r\n".format(host)).encode(
-            "utf8"
-        )
+        (
+            "GET {} HTTP/1.1\r\n".format(path)
+            + "Host: {}\r\nConnection: close\r\nUser-Agent: minerva\r\n\r\n".format(
+                host
+            )
+        ).encode("utf8")
     )
     response = s.makefile("r", encoding="utf8", newline="\r\n")
 
