@@ -1,6 +1,8 @@
 import socket
 import ssl
 
+DEFAULT_HOME = "file:///Users/ciaranobrien/minerva/minerva/minerva.html"
+
 
 def parse_url(url):
     scheme, url = url.split("://", 1)
@@ -12,7 +14,20 @@ def parse_url(url):
 
 def request(url):
     (scheme, host, path) = parse_url(url)
-    assert scheme in ["http", "https"], "Unknown scheme {}".format(scheme)
+    assert scheme in ["http", "https", "file"], "Unknown scheme {}".format(scheme)
+
+    if scheme in ["http", "https"]:
+        return web_request(scheme, host, path)
+    return local_resource(path)
+
+
+def local_resource(path):
+    with open(path, "r") as file:
+        file_contents = file.read()
+    return None, file_contents
+
+
+def web_request(scheme, host, path):
 
     port = 80 if scheme == "http" else 443
 
@@ -74,11 +89,15 @@ def show(body):
 
 
 def load(url):
-    headers, body = request(url)
+    headers, body = request(url or DEFAULT_HOME)
     show(body)
 
 
 if __name__ == "__main__":
     import sys
 
-    load(sys.argv[1])
+    try:
+        arg = sys.argv[1]
+    except IndexError:
+        arg = None
+    load(arg)
