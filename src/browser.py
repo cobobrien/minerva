@@ -42,7 +42,6 @@ def data_schema_request(encoding, value):
     <body>{value}</body>
     </html>
     """
-
     if encoding == "text/html":
         return None, html_response
 
@@ -99,12 +98,22 @@ def web_request(scheme, host, path):
 
 def show(body):
     in_angle = False
+    inside_body = False
+    tag_name = ""
+
     for c in body:
         if c == "<":
             in_angle = True
+            tag_name = ""
         elif c == ">":
             in_angle = False
-        elif not in_angle:
+            if tag_name == "body":
+                inside_body = True
+            elif tag_name == "/body":
+                inside_body = False
+        elif in_angle:
+            tag_name += c
+        elif inside_body:
             print(c, end="")
 
 
