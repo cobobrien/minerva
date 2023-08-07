@@ -1,5 +1,6 @@
 import socket
 import ssl
+import re
 
 DEFAULT_HOME = "file:///Users/ciaranobrien/minerva/minerva/minerva.html"
 
@@ -12,7 +13,14 @@ def parse_url(url):
     return (scheme, host, "/" + path)
 
 
+def parse_data_schema_request(url):
+    base_scheme, encoding, value = re.split(r"[:,]", url)
+    return encoding, value
+
+
 def request(url):
+    if url.startswith("data"):
+        return data_schema_request(*parse_data_schema_request(url))
     (scheme, host, path) = parse_url(url)
     assert scheme in ["http", "https", "file"], "Unknown scheme {}".format(scheme)
 
@@ -25,6 +33,18 @@ def local_resource(path):
     with open(path, "r") as file:
         file_contents = file.read()
     return None, file_contents
+
+
+def data_schema_request(encoding, value):
+    html_response = f"""
+    <html>
+    <head></head>
+    <body>{value}</body>
+    </html>
+    """
+
+    if encoding == "text/html":
+        return None, html_response
 
 
 def web_request(scheme, host, path):
@@ -97,7 +117,7 @@ if __name__ == "__main__":
     import sys
 
     try:
-        arg = sys.argv[1]
+        arg = " ".join(sys.argv[1:])
     except IndexError:
         arg = None
     load(arg)
