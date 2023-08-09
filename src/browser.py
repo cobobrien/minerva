@@ -1,4 +1,3 @@
-import pdb
 import socket
 import ssl
 import re
@@ -97,6 +96,18 @@ def web_request(scheme, host, path):
     return headers, body
 
 
+def transform(html):
+    transformed_html = ""
+    for c in html:
+        if c == "<":
+            transformed_html += "&lt;"
+        elif c == ">":
+            transformed_html += "&gt;"
+        else:
+            transformed_html += c
+    return f"<body>{transformed_html}</body>"
+
+
 def show(body):
     in_angle = False
     inside_body = False
@@ -133,6 +144,11 @@ def show(body):
 
 
 def load(url):
+    if url.startswith("view-source:"):
+        _, resource_url = url.split("view-source:")
+        headers, body = request(resource_url)
+        show(transform(body))
+        return
     headers, body = request(url or DEFAULT_HOME)
     show(body)
 
