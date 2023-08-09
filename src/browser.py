@@ -1,3 +1,4 @@
+import pdb
 import socket
 import ssl
 import re
@@ -100,17 +101,31 @@ def show(body):
     in_angle = False
     inside_body = False
     tag_name = ""
+    entity_buffer = ""
 
     for c in body:
         if c == "<":
             in_angle = True
             tag_name = ""
+            entity_buffer = ""
         elif c == ">":
             in_angle = False
             if tag_name == "body":
                 inside_body = True
             elif tag_name == "/body":
                 inside_body = False
+        elif c == "&" and not entity_buffer:
+            entity_buffer = "&"
+        elif entity_buffer:
+            entity_buffer += c
+            if c == ";":
+                if entity_buffer == "&lt;":
+                    print("<", end="")
+                elif entity_buffer == "&gt;":
+                    print(">", end="")
+                else:
+                    print(entity_buffer, end="")
+                entity_buffer = ""
         elif in_angle:
             tag_name += c
         elif inside_body:
