@@ -1,6 +1,8 @@
+import pdb
 import socket
 import ssl
 import re
+import zlib
 
 DEFAULT_HOME = "file:///Users/ciaranobrien/minerva/minerva/minerva.html"
 
@@ -68,29 +70,51 @@ def web_request(scheme, host, path):
     s.send(
         (
             "GET {} HTTP/1.1\r\n".format(path)
-            + "Host: {}\r\nConnection: close\r\nUser-Agent: minerva\r\n\r\n".format(
+            + "Host: {}\r\nConnection: close\r\nUser-Agent: minerva\r\nAccept-Encoding: gzip\r\n\r\n".format(
                 host
             )
         ).encode("utf8")
     )
-    response = s.makefile("r", encoding="utf8", newline="\r\n")
+    response = s.makefile("rb", newline="\r\n")
 
-    statusline = response.readline()
+    statusline = response.readline().decode("utf8")
     version, status, explanation = statusline.split(" ", 2)
     assert status == "200", "{}: {}".format(status, explanation)
 
     headers = {}
     while True:
-        line = response.readline()
+        line = response.readline().decode("utf8")
         if line == "\r\n":
             break
         header, value = line.split(":", 1)
         headers[header.lower()] = value.strip()
 
-    assert "transfer-encoding" not in headers
-    assert "content-encoding" not in headers
+    if "transfer-encoding" in headers and headers["transfer-encoding"] == "chunked":
+        chunks = []
 
-    body = response.read()
+        while True:
+            chunk_len = response.readline().decode("utf8")
+            chunk_len.replace("\r\n", "")
+            chunk_len = int(chunk_len, 16)
+            chunk = response.read(chunk_len)
+            chunks.append(chunk)
+            response.readline()
+            if chunk_len == 0:
+                break
+
+        body = b"".join(chunks)
+    else:
+        # The rest of the response is the body of the request
+        body = response.read()
+
+    # body = response.read()
+
+    if "content-encoding" in headers and headers["content-encoding"] == "gzip":
+        # The response body is gzipped, decompress it *before* decoding it
+        body = zlib.decompressobj(32).decompress(body).decode("utf8")
+    else:
+        body = body.decode("utf8")
+
     s.close()
 
     return headers, body
