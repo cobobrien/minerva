@@ -1,7 +1,10 @@
 import socket
 import ssl
 import re
+import time
 import zlib
+
+from cache import Cache
 
 DEFAULT_HOME = "file:///Users/ciaranobrien/minerva/minerva/minerva.html"
 REDIRECT_LIMIT = 5
@@ -27,7 +30,7 @@ def request(url):
     assert scheme in ["http", "https", "file"], "Unknown scheme {}".format(scheme)
 
     if scheme in ["http", "https"]:
-        return web_request(scheme, host, path)
+        return web_request(url, scheme, host, path)
     return local_resource(path)
 
 
@@ -48,7 +51,17 @@ def data_schema_request(encoding, value):
         return None, html_response
 
 
-def web_request(scheme, host, path):
+def web_request(url, scheme, host, path):
+
+    cache = Cache()
+    cached_resource = cache.get_resource(url)
+
+    if cached_resource:
+        if cache.is_resource_fresh(cached_resource):
+
+            return cached_resource["headers"], cached_resource["body"]
+        else:
+            cache.delete_resource(url)
 
     redirects = 0
     while redirects < REDIRECT_LIMIT:
@@ -113,18 +126,30 @@ def web_request(scheme, host, path):
 
         body = b"".join(chunks)
     else:
-        # The rest of the response is the body of the request
         body = response.read()
 
-    # body = response.read()
-
     if "content-encoding" in headers and headers["content-encoding"] == "gzip":
-        # The response body is gzipped, decompress it *before* decoding it
         body = zlib.decompressobj(32).decompress(body).decode("utf8")
     else:
         body = body.decode("utf8")
 
     s.close()
+
+    if "cache-control" in headers:
+        match = re.search(r"max-age=\d+", headers["cache-control"])
+        if match and "no-store" not in headers["cache-control"]:
+            match_group = match.group()
+            max_age = match_group.replace("max-age=", "")
+            age = headers["age"] if "age" in headers else 0
+
+            cache.set_resource(
+                url,
+                {
+                    "expires-at": int(time.time()) + int(max_age) - int(age),
+                    "headers": headers,
+                    "body": body,
+                },
+            )
 
     return headers, body
 
