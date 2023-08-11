@@ -1,10 +1,10 @@
-import pdb
 import socket
 import ssl
 import re
 import zlib
 
 DEFAULT_HOME = "file:///Users/ciaranobrien/minerva/minerva/minerva.html"
+REDIRECT_LIMIT = 5
 
 
 def parse_url(url):
@@ -50,44 +50,53 @@ def data_schema_request(encoding, value):
 
 def web_request(scheme, host, path):
 
-    port = 80 if scheme == "http" else 443
+    redirects = 0
+    while redirects < REDIRECT_LIMIT:
 
-    if ":" in host:
-        host, port = host.split(":", 1)
-        port = int(port)
+        port = 80 if scheme == "http" else 443
 
-    s = socket.socket(
-        family=socket.AF_INET,
-        type=socket.SOCK_STREAM,
-        proto=socket.IPPROTO_TCP,
-    )
-    s.connect((host, port))
+        if ":" in host:
+            host, port = host.split(":", 1)
+            port = int(port)
 
-    if scheme == "https":
-        ctx = ssl.create_default_context()
-        s = ctx.wrap_socket(s, server_hostname=host)
+        s = socket.socket(
+            family=socket.AF_INET,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+        s.connect((host, port))
 
-    s.send(
-        (
-            "GET {} HTTP/1.1\r\n".format(path)
-            + "Host: {}\r\nConnection: close\r\nUser-Agent: minerva\r\nAccept-Encoding: gzip\r\n\r\n".format(
-                host
-            )
-        ).encode("utf8")
-    )
-    response = s.makefile("rb", newline="\r\n")
+        if scheme == "https":
+            ctx = ssl.create_default_context()
+            s = ctx.wrap_socket(s, server_hostname=host)
 
-    statusline = response.readline().decode("utf8")
-    version, status, explanation = statusline.split(" ", 2)
-    assert status == "200", "{}: {}".format(status, explanation)
+        s.send(
+            (
+                "GET {} HTTP/1.1\r\n".format(path)
+                + "Host: {}\r\nConnection: close\r\nUser-Agent: minerva\r\nAccept-Encoding: gzip\r\n\r\n".format(
+                    host
+                )
+            ).encode("utf8")
+        )
+        response = s.makefile("rb", newline="\r\n")
 
-    headers = {}
-    while True:
-        line = response.readline().decode("utf8")
-        if line == "\r\n":
+        statusline = response.readline().decode("utf8")
+
+        version, status, explanation = statusline.split(" ", 2)
+
+        headers = {}
+        while True:
+            line = response.readline().decode("utf8")
+            if line == "\r\n":
+                break
+            header, value = line.split(":", 1)
+            headers[header.lower()] = value.strip()
+
+        if int(status) >= 300:
+            redirects += 1
+            (scheme, host, path) = parse_url(headers["location"])
+        elif int(status) >= 200:
             break
-        header, value = line.split(":", 1)
-        headers[header.lower()] = value.strip()
 
     if "transfer-encoding" in headers and headers["transfer-encoding"] == "chunked":
         chunks = []
